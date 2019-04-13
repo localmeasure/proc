@@ -1,7 +1,7 @@
 package proc
 
 import (
-	"context"
+	 "context"
 	"errors"
 	"log"
 	"strconv"
@@ -20,10 +20,12 @@ type Stat struct {
 
 func Collect(pid uint64, interval time.Duration) <-chan Stat {
 	stats := make(chan Stat)
-	ticker := time.Tick(interval)
-	for range ticker {
-		stats <- collect(pid, interval)
-	}
+	go func() {
+		ticker := time.Tick(interval)
+		for range ticker {
+			stats <- collect(pid, interval)
+		}
+	}()
 	return stats
 }
 
@@ -41,7 +43,10 @@ func collect(pid uint64, interval time.Duration) Stat {
 		if err != nil {
 			log.Println(err)
 		}
-		done <- struct{}{}
+		select {
+		case done <- struct{}{}:
+		case <-ctx.Done():
+		}
 	}()
 	go func() {
 		var err error
@@ -49,13 +54,15 @@ func collect(pid uint64, interval time.Duration) Stat {
 		if err != nil {
 			log.Println(err)
 		}
-		done <- struct{}{}
+		select {
+		case done <- struct{}{}:
+		case <-ctx.Done():
+		}
 	}()
 	select {
 	case <-done:
-	case <-done:
+	<-done
 	case <-ctx.Done():
-		log.Println(ctx.Err())
 	}
 	return stat
 }

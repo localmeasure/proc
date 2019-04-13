@@ -7,8 +7,6 @@ import (
 	"unsafe"
 )
 
-const mask = uint8(syscall.DT_LNK | syscall.DT_SOCK)
-
 func readDir(dirName string) (uint64, error) {
 	counter := uint64(0)
 	fd, err := syscall.Open(dirName, 0, 0)
@@ -33,13 +31,14 @@ func readDir(dirName string) (uint64, error) {
 			}
 		}
 		entry := (*syscall.Dirent)(unsafe.Pointer(&buf[cur]))
-		if v := unsafe.Offsetof(entry.Reclen) + unsafe.Sizeof(entry.Reclen); uintptr(read) < v {
+		entryLen := read - cur
+		if v := unsafe.Offsetof(entry.Reclen) + unsafe.Sizeof(entry.Reclen); uintptr(entryLen) < v {
 			panic("header size is bigger than buffer")
 		}
-		if read < int(entry.Reclen) {
+		if entryLen < int(entry.Reclen) {
 			panic("record length is bigger than buffer")
 		}
-		if mask&entry.Type != 0 {
+		if entry.Type == syscall.DT_LNK {
 			counter++
 		}
 		cur += int(entry.Reclen)
