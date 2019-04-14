@@ -1,4 +1,4 @@
-// +build linux darwin freebsd openbsd netbsd
+// +build linux
 
 package proc
 
@@ -7,6 +7,7 @@ import (
 	"unsafe"
 )
 
+// See https://github.com/golang/tools/tree/master/internal/fastwalk
 func readDir(dirName string) (uint64, error) {
 	counter := uint64(0)
 	fd, err := syscall.Open(dirName, 0, 0)
