@@ -1,7 +1,6 @@
 package proc
 
 import (
-	 "context"
 	"errors"
 	"log"
 	"strconv"
@@ -31,38 +30,48 @@ func Collect(pid uint64, interval time.Duration) <-chan Stat {
 
 func collect(pid uint64, interval time.Duration) Stat {
 	var stat Stat
+
 	done := make(chan struct{}, 2)
-	ctx, cancel := context.WithTimeout(context.Background(), interval)
-	defer func() {
-		cancel()
-		close(done)
+	timeout := make(chan struct{})
+	go func() {
+		time.Sleep(interval)
+		timeout <- struct{}{}
+		close(timeout)
 	}()
+
 	go func() {
 		var err error
 		stat.Heap, stat.Stack, err = readMem(pid)
 		if err != nil {
 			log.Println(err)
 		}
-		select {
-		case done <- struct{}{}:
-		case <-ctx.Done():
-		}
+		done <- struct{}{}
 	}()
+
 	go func() {
 		var err error
 		stat.Fd, err = readDir("/proc/" + strconv.FormatUint(pid, 10) + "/fd")
 		if err != nil {
 			log.Println(err)
 		}
-		select {
-		case done <- struct{}{}:
-		case <-ctx.Done():
+		// stdin, stdout, stderr
+		if stat.Fd > 3 {
+			stat.Fd -= 3
 		}
+		done <- struct{}{}
 	}()
-	select {
-	case <-done:
-	<-done
-	case <-ctx.Done():
+
+	count := 0
+	for {
+		select {
+		case <-done:
+			count++
+			if count == 2 {
+				close(done)
+				return stat
+			}
+		case <-timeout:
+			return stat
+		}
 	}
-	return stat
 }
